@@ -1,0 +1,21 @@
+{
+  "name": "samp-token-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for SA-MP launcher token validation",
+  "main": "token-bot.js",
+  "scripts": {
+    "start": "node token-bot.js",
+    "dev": "nodemon token-bot.js"
+  },
+  "keywords": ["discord", "samp", "launcher", "token"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "sqlite3": "^5.1.7",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
