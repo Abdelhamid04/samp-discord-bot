@@ -363,6 +363,98 @@ client.login(CONFIG.BOT_TOKEN).then(() => {
 function startApiServer() {
     const app = express();
     
+    app.use(express.json());
+
+    // Register token endpoint - Launcher calls this before connecting to game
+    app.post('/register-token', (req, res) => {
+        const { token, machine_name, user_name } = req.body;
+
+        // Determine client public IP from request (fallback to body if provided)
+        const ipFromReq = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+        const player_ip = ipFromReq || req.body.player_ip || '0.0.0.0';
+
+        // Validate input
+        if (!token || !/^[A-Z0-9]{32}$/.test(token.toUpperCase())) {
+            return res.status(400).json({ error: 'Invalid token format' });
+        }
+
+        if (!machine_name || !user_name) {
+            return res.status(400).json({ error: 'Missing machine_name or user_name' });
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+
+        // Register token with game server info
+        db.run(
+            'INSERT OR REPLACE INTO launcher_tokens (token, machine_name, user_name, created_at, player_ip, used) VALUES (?, ?, ?, ?, ?, 0)',
+            [token.toUpperCase(), machine_name, user_name, now, player_ip],
+            function(err) {
+                if (err) {
+                    console.error('Error registering token:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                console.log(`✅ Token registered from launcher: ${token.substring(0, 8)}... (Machine: ${machine_name}, IP: ${player_ip})`);
+                res.json({
+                    success: true,
+                    token: token.substring(0, 8) + '...',
+                    expires_in: CONFIG.TOKEN_EXPIRY_SECONDS
+                });
+            }
+        );
+    });
+
+    // Validate by IP endpoint - SA-MP server calls this on player connect
+    app.get('/validate-ip/:ip', (req, res) => {
+        const ip = (req.params.ip || '').trim();
+        const playerName = (req.query.player || '').toString();
+
+        if (!ip) {
+            return res.status(400).json({ valid: false, error: 'Missing IP' });
+        }
+
+        db.get(
+            'SELECT * FROM launcher_tokens WHERE player_ip = ? AND used = 0 ORDER BY created_at DESC LIMIT 1',
+            [ip],
+            (err, row) => {
+                if (err) {
+                    console.error('DB error validate-ip:', err);
+                    return res.status(500).json({ valid: false, error: 'Database error' });
+                }
+
+                if (!row) {
+                    return res.status(401).json({ valid: false, error: 'Token not found for IP' });
+                }
+
+                const age = Math.floor(Date.now() / 1000) - row.created_at;
+                if (age > CONFIG.TOKEN_EXPIRY_SECONDS) {
+                    db.run('DELETE FROM launcher_tokens WHERE token = ?', [row.token]);
+                    return res.status(401).json({ valid: false, error: 'Token expired' });
+                }
+
+                // Mark token used and attach player name if provided
+                db.run(
+                    'UPDATE launcher_tokens SET used = 1, player_name = ? WHERE token = ?',
+                    [playerName || row.player_name, row.token],
+                    (updateErr) => {
+                        if (updateErr) {
+                            console.error('DB update error validate-ip:', updateErr);
+                            return res.status(500).json({ valid: false, error: 'Database update error' });
+                        }
+
+                        res.json({
+                            valid: true,
+                            token: row.token,
+                            machine_name: row.machine_name,
+                            user_name: row.user_name,
+                            age_seconds: age
+                        });
+                    }
+                );
+            }
+        );
+    });
+    
     // Validate token endpoint - SA-MP server calls this on player connect
     app.get('/validate/:token', (req, res) => {
         const token = req.params.token.toUpperCase();
