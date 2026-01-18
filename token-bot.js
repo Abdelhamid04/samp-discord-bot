@@ -352,14 +352,6 @@ async function registerCommands() {
     }
 }
 
-// Start bot
-client.login(CONFIG.BOT_TOKEN).then(() => {
-    registerCommands();
-    
-    // Start HTTP API server for SA-MP validation
-    startApiServer();
-});
-
 // HTTP API Server for SA-MP server validation
 function startApiServer() {
     const app = express();
@@ -506,6 +498,14 @@ function startApiServer() {
         console.log(`API on http://0.0.0.0:${PORT}`);
     });
 }
+
+// Start API server immediately for health checks
+startApiServer();
+
+// Start Discord bot
+client.login(CONFIG.BOT_TOKEN).then(() => {
+    registerCommands();
+});
 
 // Graceful shutdown
 process.on('SIGINT', () => {
