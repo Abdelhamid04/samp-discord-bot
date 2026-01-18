@@ -11,7 +11,8 @@ const CONFIG = {
     TOKEN_CHANNEL_ID: '1462258313952759848', // Salon #launcher-tokens
     TOKEN_EXPIRY_SECONDS: 120, // 2 minutes
     DB_PATH: path.join(__dirname, 'tokens.db'),
-    API_PORT: process.env.PORT || 3002 // Port for SA-MP server validation
+    // Replit provides PORT; fallback to 3002 for local
+    API_PORT: process.env.PORT || process.env.API_PORT || 3002 // Port for SA-MP server validation
 };
 
 // Initialize Discord bot
@@ -362,6 +363,11 @@ client.login(CONFIG.BOT_TOKEN).then(() => {
 // HTTP API Server for SA-MP server validation
 function startApiServer() {
     const app = express();
+
+    // Basic health check for hosting platform
+    app.get('/', (_req, res) => {
+        res.status(200).send('OK');
+    });
     
     app.use(express.json());
 
@@ -495,8 +501,9 @@ function startApiServer() {
         );
     });
     
-    app.listen(CONFIG.API_PORT, '0.0.0.0', () => {
-        console.log(`API on http://0.0.0.0:${CONFIG.API_PORT}`);
+    const PORT = process.env.PORT || CONFIG.API_PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`API on http://0.0.0.0:${PORT}`);
     });
 }
 
