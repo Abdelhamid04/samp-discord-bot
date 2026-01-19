@@ -49,6 +49,34 @@ app.post('/register-token', (req, res) => {
     );
 });
 
+// Webhook endpoint for launcher token registration (alternative to /register-token)
+app.post('/webhook/token', (req, res) => {
+    const { token, machine_name, user_name } = req.body;
+    const ipFromReq = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+    const player_ip = ipFromReq || req.body.player_ip || '0.0.0.0';
+
+    if (!token || !/^[A-Z0-9]{32}$/.test(token.toUpperCase())) {
+        return res.status(400).json({ error: 'Invalid token format' });
+    }
+    if (!machine_name || !user_name) {
+        return res.status(400).json({ error: 'Missing machine_name or user_name' });
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    db.run(
+        'INSERT OR REPLACE INTO launcher_tokens (token, machine_name, user_name, created_at, player_ip, used) VALUES (?, ?, ?, ?, ?, 0)',
+        [token.toUpperCase(), machine_name, user_name, now, player_ip],
+        function(err) {
+            if (err) {
+                console.error('Error registering token via webhook:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            console.log(`✅ Token registered via webhook: ${token.substring(0, 8)}... (Machine: ${machine_name}, IP: ${player_ip})`);
+            res.json({ success: true, token: token.substring(0, 8) + '...', expires_in: CONFIG.TOKEN_EXPIRY_SECONDS });
+        }
+    );
+});
+
 app.get('/validate-ip/:ip', (req, res) => {
     const ip = (req.params.ip || '').trim();
     const playerName = (req.query.player || '').toString();
